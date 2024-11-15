@@ -78,11 +78,11 @@ pca_result <- prcomp(df_scaled, center = TRUE, scale. = TRUE)
 
 # PCA biplot using factoextra
 pca_plot <- fviz_pca_biplot(pca_result,
-                            geom = "point",          # Show data points
+                            geom = "point",          # Shows data points
                             addEllipses = FALSE,     # No ellipses around groups
                             col.var = "red",         # Default color for all other variables
                             col.ind = "black",       # Color of points
-                            repel = TRUE,            # Avoid text overlapping
+                            repel = TRUE,            # Avoids text overlapping
                             arrow.size = 0.5,        # Size of the arrows
                             pointsize = 3,           # Size of the data points
                             labelsize = 5,           # Size of variable names
