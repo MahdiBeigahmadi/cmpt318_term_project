@@ -1,7 +1,4 @@
-required_packages <- c("dplyr", "ggplot2", "depmixS4", "lubridate", "data.table", "devtools", "factoextra", "reshape2", "zoo")
-install.packages("car")
-install.packages('usethis')
-
+required_packages <- c("dplyr", "ggplot2", "depmixS4", "lubridate", "data.table", "devtools", "factoextra", "reshape2", "zoo","car","usethis")
 
 install_if_missing <- function(packages){
   installed <- rownames(installed.packages())
@@ -23,7 +20,8 @@ library(depmixS4)
 library(factoextra)  
 library(reshape2)    
 library(zoo)         
-library("car")
+library(car)
+library(usethis)
 
 # ******************************
 #  Read the Dataset 
@@ -31,8 +29,7 @@ library("car")
 
 
 # Define the file path
-file_path <- "YOUR DATASET DIRECTORY"
-
+file_path <- "Path to dataset"
 # Read the data using data.table's fread for efficiency
 df <- fread(file_path, header = TRUE, sep = ",", na.strings = "NA", stringsAsFactors = FALSE)
 
@@ -318,11 +315,16 @@ cat("\nBest model has", best_num_states, "states\n")
 best_model <- models[[as.character(best_num_states)]]
 
 
+# Save markov model
+saveRDS(best_model, file = "training_model.rds")
 
+# Use for loading in training model.(comment out when not in use).
+#training_model_path = "Path to .rds file."
+#best_model = readRDS(training_model_path)
 
 
 # ************************************
-# Edvaluating performance on test data
+# Evaluating performance on test data
 # ************************************
 test_model <- depmix(
   response = list(Global_active_power ~ 1, Voltage ~ 1),
@@ -380,7 +382,7 @@ ggplot(result_df, aes(x = States)) +
   
   geom_line(aes(y = LogLikelihood, color = "Log-Likelihood"), size = 1) +
   geom_point(aes(y = LogLikelihood, color = "Log-Likelihood"), size = 3) +
-    labs(
+  labs(
     title = "BIC and Log Likelihood for Different Number of States",
     x = "Number of States",
     y = "Value",
@@ -394,4 +396,87 @@ ggplot(result_df, aes(x = States)) +
     axis.title.y = element_text(size = 12),
     axis.title.x = element_text(size = 12)
   )
+
+
+
+# ******************************
+# Anomaly Detection
+# ******************************
+
+# Partition into 10 roughly equal-sized subsets.
+# Assign a number to each row of data from 1 to 10.
+test_data_partition <- test_data %>%
+  mutate(week_group = ntile(row_number(),10))
+
+# Split up the above data into 10 subsets for calculating the log-likelihood.
+weekly_subsets <- test_data_partition %>%
+  group_split(week_group)
+
+# Computing the log-likelihood for each subset with best performing model.
+# Initialize a data frame to store the results
+subset_data_frame <- data.frame(
+  week_group = 1:10,
+  LogLikelihood = numeric(10),
+  avg_loglikelihood = numeric(10)
+)
+
+# Loop over each subset
+for (i in 1:10) {
+  subset_data <- weekly_subsets[[i]]
+  
+  subset_features <- subset_data[, c("Global_active_power", "Voltage")]
+  
+  #  depmix model using gaussian distribution 
+  hmm_model_subset <- depmix(
+    response = list(Global_active_power ~ 1, Voltage ~ 1),
+    data = subset_features,
+    nstates = best_model@nstates,
+    family = list(gaussian(), gaussian())
+  )
+  
+  # Set parameters from the best model
+  hmm_model_subset <- setpars(hmm_model_subset, getpars(best_model))
+  
+  # Calculating the log-likelihood
+  loglikelihood_subset <- logLik(hmm_model_subset)
+  
+  ll_per_obs <- loglikelihood_subset/ nrow(subset_features)
+  
+  # Store the results
+  subset_data_frame$LogLikelihood[i] <- loglikelihood_subset
+  subset_data_frame$avg_loglikelihood[i] <- ll_per_obs
+  
+}
+
+# Calculating the results
+
+# Get training log-likelihood per observation
+train_log_likelihood <- logLik(best_model) /nrow(train_features)
+
+# Compute deviations from the training log-likelihood per observation
+subset_data_frame$Deviation <- subset_data_frame$avg_loglikelihood - train_log_likelihood
+
+# Compute the maximum deviation (threshold value)
+threshold <- max(abs(subset_data_frame$Deviation))
+cat("Threshold for the acceptable deviation of any unseen observations:", threshold, "\n")
+
+# Display the deviations for each subset
+print(subset_data_frame)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
