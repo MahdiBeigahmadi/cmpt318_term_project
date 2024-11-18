@@ -225,7 +225,7 @@ arrow_data <- data.frame(
 )
 
 # PCA plot PC1 vs PC2
-ggplot(df_scaled, aes(x = PC1, y = PC2, color = "orange")) +
+ggplot(df_scaled, aes(x = PC1, y = PC2, color = "green")) +
   geom_jitter(alpha = 0.5, size = 2, width = 0.2, height = 0.2) +  # Jitter to reduce overlap
   scale_color_brewer(palette = "Dark2") +
   geom_segment(data = arrow_data, aes(x = 0, y = 0, xend = PC1, yend = PC2), 
