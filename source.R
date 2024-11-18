@@ -1,4 +1,9 @@
-required_packages <- c("dplyr", "ggplot2", "depmixS4", "lubridate", "data.table", "devtools", "factoextra", "reshape2", "zoo","car","usethis")
+required_packages <- c("dplyr", "ggplot2", "depmixS4", "lubridate", "data.table", "devtools", "factoextra", "reshape2", "zoo")
+install.packages("car")
+install.packages('usethis')
+install.packages('doParallel')
+install.packages("foreach")
+
 
 install_if_missing <- function(packages){
   installed <- rownames(installed.packages())
@@ -20,8 +25,9 @@ library(depmixS4)
 library(factoextra)  
 library(reshape2)    
 library(zoo)         
-library(car)
-library(usethis)
+library("car")
+library(doParallel)
+library(foreach)
 
 # ******************************
 #  Read the Dataset 
@@ -29,7 +35,8 @@ library(usethis)
 
 
 # Define the file path
-file_path <- "Path to dataset"
+file_path <- "/Users/koushaamouzesh/Desktop/Fall 2024/318/term project/group_project/TermProjectData.txt"
+
 # Read the data using data.table's fread for efficiency
 df <- fread(file_path, header = TRUE, sep = ",", na.strings = "NA", stringsAsFactors = FALSE)
 
@@ -266,89 +273,85 @@ train_data <- df_scaled %>% filter(Year <= 2008)
 test_data <- df_scaled %>% filter(Year == 2009)
 
 
-cat("Training Data Summary (2006-2008):\n")
-summary(train_data)
-cat("Testing Data Summary (2009):\n")
-summary(test_data)
+train_features <- train_data[, c("Global_intensity","Voltage")]
+test_features <- test_data[, c("Global_intensity","Voltage")]
 
-train_features <- train_data[, c("Global_active_power", "Voltage")]
-test_features <- test_data[, c("Global_active_power", "Voltage")]
+# ************************************
+# Model Training Optimizations
+# ************************************
 
-# specifying number of states
-states_list <- c(6, 8, 10, 12, 16, 18)
+# 1. Reduce the number of states to try
+states_list <- c(4, 6, 8, 10, 12, 16)
+
+# 2. Adjust EM algorithm control parameters
+em_ctrl <- em.control(maxit = 1000, tol = 1e-5)
+
+# Optional: 3. Sample 50% of the training data to reduce size
+# Comment this out if you want to use all data
+# train_features <- train_features %>% sample_frac(0.5)
+
+# Initialize lists to store results
 log_likelihoods <- list()
 bics <- list()
 models <- list()
 
-# ************************************
-# Model training
-# ************************************
-for (num_states in states_list) {
-  cat("\nTraining HMM with", num_states, "states...\n")
-  
-  #  depmix model using gaussian distribution 
-  hmm_model <- depmix(
-    response = list(Global_active_power ~ 1, Voltage ~ 1),
-    data = train_features,
-    nstates = num_states,
-    family = list(gaussian(), gaussian())
-  )
-  
-  set.seed(123)  
-  fitted_model <- fit(hmm_model, verbose = FALSE, emcontrol = em.control(maxit = 5000, tol = 1e-8))
-  
-  log_likelihood <- logLik(fitted_model)
-  bic_value <- BIC(fitted_model)
-  
-  log_likelihoods[[as.character(num_states)]] <- log_likelihood
-  bics[[as.character(num_states)]] <- bic_value
-  models[[as.character(num_states)]] <- fitted_model
-  
-  cat("Log-Likelihood:", log_likelihood, "\n")
-  cat("BIC:", bic_value, "\n")
+# 4. Parallelize model training (requires doParallel and foreach packages)
+
+# Set up parallel backend to use multiple processors
+num_cores <- detectCores() - 1  # Leave one core free
+cl <- makeCluster(num_cores)
+registerDoParallel(cl)
+
+# Parallelized model training loop
+results <- foreach(num_states = states_list, .packages = 'depmixS4') %dopar% {
+  # Suppress output in parallel processing
+  suppressMessages({
+    hmm_model <- depmix(
+      response = list(Global_intensity ~ 1, Voltage ~ 1),
+      data = train_features,
+      nstates = num_states,
+      family = list(gaussian(), gaussian())
+    )
+    
+    set.seed(42)
+    print(paste0("train model state = ", num_states))
+    fitted_model <- fit(hmm_model, verbose = FALSE, emcontrol = em_ctrl)
+    
+    log_likelihood <- logLik(fitted_model)
+    bic_value <- BIC(fitted_model)
+    
+    list(
+      num_states = num_states,
+      log_likelihood = log_likelihood,
+      bic_value = bic_value,
+      model = fitted_model
+    )
+  })
 }
 
-# select the best model based on the lowest BIC
+# Stop the cluster after computations
+stopCluster(cl)
+
+# Collect results from the parallel computations
+for (res in results) {
+  num_states <- res$num_states
+  log_likelihoods[[as.character(num_states)]] <- res$log_likelihood
+  bics[[as.character(num_states)]] <- res$bic_value
+  models[[as.character(num_states)]] <- res$model
+  cat("Log-Likelihood for", num_states, "states:", res$log_likelihood, "\n")
+  cat("BIC for", num_states, "states:", res$bic_value, "\n")
+}
+
+# Select the best model based on the lowest BIC
 best_num_states <- as.numeric(names(which.min(unlist(bics))))
 cat("\nBest model has", best_num_states, "states\n")
 
 best_model <- models[[as.character(best_num_states)]]
 
-
-# Save markov model
+# Save the best model
 saveRDS(best_model, file = "training_model.rds")
 
-# Use for loading in training model.(comment out when not in use).
-#training_model_path = "Path to .rds file."
-#best_model = readRDS(training_model_path)
 
-
-# ************************************
-# Evaluating performance on test data
-# ************************************
-test_model <- depmix(
-  response = list(Global_active_power ~ 1, Voltage ~ 1),
-  data = test_features,
-  nstates = best_num_states,
-  family = list(gaussian(), gaussian())
-)
-
-# using parameters from the best model to predict on test data
-test_fitted <- setpars(test_model, getpars(best_model))
-test_fitted <- fit(test_fitted, emcontrol = em.control(maxit = 5000, tol = 1e-8))
-
-# extracting log-likelihood for the test data
-test_log_likelihood <- logLik(test_fitted)
-cat("Log-Likelihood on Test Data:", test_log_likelihood, "\n")
-
-
-
-
-
-
-# ************************************
-# Display results
-# ************************************
 cat("\nTraining Results Summary:\n")
 result_df <- data.frame(
   States = states_list,
@@ -356,6 +359,130 @@ result_df <- data.frame(
   BIC = unlist(bics)
 )
 print(result_df)
+
+# plotting BIC and log-liklihood
+ggplot(result_df, aes(x = States)) +
+  geom_line(aes(y = BIC, color = "BIC"), size = 1) +
+  geom_point(aes(y = BIC, color = "BIC"), size = 3) +
+  
+  geom_line(aes(y = LogLikelihood, color = "Log-Likelihood"), size = 1) +
+  geom_point(aes(y = LogLikelihood, color = "Log-Likelihood"), size = 3) +
+  labs(
+    title = "BIC and Log Likelihood for Different Number of States",
+    x = "Number of States",
+    y = "Value",
+    color = "Metric"
+  ) +
+  scale_color_manual(values = c("BIC" = "blue", "Log-Likelihood" = "red")) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14),
+    legend.position = "top",
+    axis.title.y = element_text(size = 12),
+    axis.title.x = element_text(size = 12)
+  )
+
+
+# ************************************
+# Evaluating Performance on Test Data
+# ************************************
+
+# using the best model parameters to predict on test data
+test_model <- depmix(
+  response = list(Global_intensity ~ 1, Voltage ~ 1),
+  data = test_features,
+  nstates = best_num_states,
+  family = list(gaussian(), gaussian())
+)
+
+# setting parameters from the best model
+test_fitted <- setpars(test_model, getpars(best_model))
+test_fitted <- fit(test_fitted, emcontrol = em_ctrl, verbose = FALSE)
+
+# extracting log-likelihood for the test data
+test_log_likelihood <- logLik(test_fitted)
+cat("Log-Likelihood on Test Data:", test_log_likelihood, "\n")
+
+# ************************************
+# Display Training Results
+# ************************************
+
+# Plot BIC vs Number of States
+ggplot(result_df, aes(x = States, y = BIC)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "red", size = 3) +
+  labs(title = "BIC vs. Number of States",
+       x = "Number of States",
+       y = "BIC Value") +
+  theme_minimal()
+
+# Plot Log-Likelihood vs Number of States
+ggplot(result_df, aes(x = States, y = LogLikelihood)) +
+  geom_line(color = "blue", size = 1) +
+  geom_point(color = "red", size = 3) +
+  labs(title = "Log-Likelihood vs. Number of States",
+       x = "Number of States",
+       y = "Log-Likelihood") +
+  theme_minimal()
+
+# ******************************
+# Anomaly Detection Optimization
+# ******************************
+# Partition into 10 roughly equal-sized subsets
+test_data_partition <- test_data %>%
+  mutate(week_group = ntile(row_number(), 10))
+
+weekly_subsets <- test_data_partition %>%
+  group_split(week_group)
+
+# Initialize data frame to store results
+subset_data_frame <- data.frame(
+  week_group = 1:10,
+  LogLikelihood = numeric(10),
+  avg_loglikelihood = numeric(10)
+)
+
+# Optimize anomaly detection loop
+for (i in 1:10) { # HAS BUG NEEDS TO BE FIXED!!!!!!!!!
+  subset_data <- weekly_subsets[[i]]
+  
+  subset_features <- subset_data[, c("Global_intensity", "Voltage")]
+  
+  hmm_model_subset <- depmix(
+    response = list(Global_intensity ~ 1, Voltage ~ 1),
+    data = subset_features,
+    nstates = best_num_states,
+    family = list(gaussian(), gaussian())
+  )
+  
+  # Set parameters from the best model
+  hmm_model_subset <- setpars(hmm_model_subset, getpars(best_model))
+  
+  # Fit the model with fewer iterations and higher tolerance
+  hmm_model_subset <- fit(hmm_model_subset, emcontrol = em_ctrl, verbose = FALSE)
+  
+  # Calculate log-likelihood
+  loglikelihood_subset <- logLik(hmm_model_subset)
+  ll_per_obs <- loglikelihood_subset / nrow(subset_features)
+  
+  # Store the results
+  subset_data_frame$LogLikelihood[i] <- loglikelihood_subset
+  subset_data_frame$avg_loglikelihood[i] <- ll_per_obs
+}
+
+# Calculate deviations and threshold
+train_log_likelihood <- logLik(best_model) / nrow(train_features)
+subset_data_frame$Deviation <- subset_data_frame$avg_loglikelihood - train_log_likelihood
+threshold <- max(abs(subset_data_frame$Deviation))
+cat("Threshold for the acceptable deviation of any unseen observations:", threshold, "\n")
+print(subset_data_frame)
+
+
+
+
+# ************************************
+# Display results
+# ************************************
 
 # plot of BIC vs # of states
 ggplot(result_df, aes(x = States, y = BIC)) +
@@ -382,7 +509,7 @@ ggplot(result_df, aes(x = States)) +
   
   geom_line(aes(y = LogLikelihood, color = "Log-Likelihood"), size = 1) +
   geom_point(aes(y = LogLikelihood, color = "Log-Likelihood"), size = 3) +
-  labs(
+    labs(
     title = "BIC and Log Likelihood for Different Number of States",
     x = "Number of States",
     y = "Value",
@@ -396,87 +523,4 @@ ggplot(result_df, aes(x = States)) +
     axis.title.y = element_text(size = 12),
     axis.title.x = element_text(size = 12)
   )
-
-
-
-# ******************************
-# Anomaly Detection
-# ******************************
-
-# Partition into 10 roughly equal-sized subsets.
-# Assign a number to each row of data from 1 to 10.
-test_data_partition <- test_data %>%
-  mutate(week_group = ntile(row_number(),10))
-
-# Split up the above data into 10 subsets for calculating the log-likelihood.
-weekly_subsets <- test_data_partition %>%
-  group_split(week_group)
-
-# Computing the log-likelihood for each subset with best performing model.
-# Initialize a data frame to store the results
-subset_data_frame <- data.frame(
-  week_group = 1:10,
-  LogLikelihood = numeric(10),
-  avg_loglikelihood = numeric(10)
-)
-
-# Loop over each subset
-for (i in 1:10) {
-  subset_data <- weekly_subsets[[i]]
-  
-  subset_features <- subset_data[, c("Global_active_power", "Voltage")]
-  
-  #  depmix model using gaussian distribution 
-  hmm_model_subset <- depmix(
-    response = list(Global_active_power ~ 1, Voltage ~ 1),
-    data = subset_features,
-    nstates = best_model@nstates,
-    family = list(gaussian(), gaussian())
-  )
-  
-  # Set parameters from the best model
-  hmm_model_subset <- setpars(hmm_model_subset, getpars(best_model))
-  
-  # Calculating the log-likelihood
-  loglikelihood_subset <- logLik(hmm_model_subset)
-  
-  ll_per_obs <- loglikelihood_subset/ nrow(subset_features)
-  
-  # Store the results
-  subset_data_frame$LogLikelihood[i] <- loglikelihood_subset
-  subset_data_frame$avg_loglikelihood[i] <- ll_per_obs
-  
-}
-
-# Calculating the results
-
-# Get training log-likelihood per observation
-train_log_likelihood <- logLik(best_model) /nrow(train_features)
-
-# Compute deviations from the training log-likelihood per observation
-subset_data_frame$Deviation <- subset_data_frame$avg_loglikelihood - train_log_likelihood
-
-# Compute the maximum deviation (threshold value)
-threshold <- max(abs(subset_data_frame$Deviation))
-cat("Threshold for the acceptable deviation of any unseen observations:", threshold, "\n")
-
-# Display the deviations for each subset
-print(subset_data_frame)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
