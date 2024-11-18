@@ -4,7 +4,6 @@ install.packages('usethis')
 install.packages('doParallel')
 install.packages("foreach")
 
-
 install_if_missing <- function(packages){
   installed <- rownames(installed.packages())
   for(p in packages){
@@ -29,18 +28,17 @@ library("car")
 library(doParallel)
 library(foreach)
 
-file_path <- "/Users/koushaamouzesh/Desktop/Fall 2024/318/term project/group_project/TermProjectData.txt"
+file_path <- "/Users/mahdi/Desktop/termproject/TermProjectData.txt"
 
 df <- fread(file_path, header = TRUE, sep = ",", na.strings = "NA", stringsAsFactors = FALSE)
 
-# converting to data.frame if necessary
+# Converting to data.frame if necessary
 df <- as.data.frame(df)
 
 cat("First 10 rows of the dataframe:\n")
 head(df, 10)
 cat("Column Names:\n")
 colnames(df)
-
 
 # **************************************************************
 # Combining Date and Time into DateTime and Convert to POSIXct
@@ -53,15 +51,13 @@ cat("DateTime conversion completed.\n")
 str(df$DateTime)
 
 # ******************************
-# Extract Time Window on Monday (09:00 AM to 12:00 AM)
+# Extract Time Window on Monday (09:00 AM to 12:00 PM)
 # ******************************
 
 # Define the function to extract the time window
 extract_time_window <- function(dataframe) {
   df_monday_9am_to_12pm <- dataframe %>%
-    filter(weekdays(DateTime) == "Wednesday" & hour(DateTime) >= 9 & hour(DateTime) < 12)
-  
-  
+    filter(weekdays(DateTime) == "Monday" & hour(DateTime) >= 9 & hour(DateTime) < 12)
   return(df_monday_9am_to_12pm)
 }
 
@@ -69,7 +65,7 @@ extract_time_window <- function(dataframe) {
 df <- extract_time_window(df)
 
 # View the extracted time window data
-cat("Extracted Time Window Data (09:00 AM to 12:00 AM on Monday):\n")
+cat("Extracted Time Window Data (09:00 AM to 12:00 PM on Monday):\n")
 print(head(df))
 
 # ******************************
@@ -83,7 +79,7 @@ numeric_cols <- c("Global_active_power", "Global_reactive_power", "Voltage",
 
 df[numeric_cols] <- lapply(df[numeric_cols], function(x) as.numeric(x))
 
-# checking for conversion success
+# Checking for conversion success
 if(any(sapply(df[numeric_cols], function(x) any(is.na(x))))){
   cat("Warning: Some numeric columns have NA values after conversion.\n")
 } else {
@@ -94,18 +90,18 @@ if(any(sapply(df[numeric_cols], function(x) any(is.na(x))))){
 # Handling the Missing Values
 # ******************************
 
-# check for missing values
+# Check for missing values
 missing_values <- sapply(df[numeric_cols], function(x) sum(is.na(x)))
 cat("Missing Values in Each Numeric Column:\n")
 print(missing_values)
 
-# aproximating the NA values
+# Approximating the NA values
 fill_na <- function(x) {
-  # for interpolation
+  # For interpolation
   x <- na.approx(x, na.rm = FALSE)
-  # to handle leading NAs
+  # To handle leading NAs
   x <- na.locf(x, na.rm = FALSE)
-  # to handle trailing NAs
+  # To handle trailing NAs
   x <- na.locf(x, na.rm = FALSE, fromLast = TRUE)
   return(x)
 }
@@ -117,25 +113,25 @@ cat("Missing Values in Each Numeric Column (After Interpolation):\n")
 print(missing_values_after)
 
 df_clean <- df
+
 # ******************************
 # Feature Engineering
 # ******************************
 
-# creating new features based on domain knowledge
+# Creating new features based on domain knowledge
 
-# total Sub Metering
+# Total Sub Metering
 df_clean$Total_sub_metering <- df_clean$Sub_metering_1 + df_clean$Sub_metering_2 + df_clean$Sub_metering_3
 
-# time-based features
+# Time-based features
 df_clean$Hour <- as.integer(format(df_clean$DateTime, "%H"))
 df_clean$DayOfWeek <- as.factor(weekdays(df_clean$DateTime))
 df_clean$Month <- as.factor(format(df_clean$DateTime, "%m"))
 
-# removing initial rows with NA due to lag and rolling calculations
+# Removing initial rows with NA due to lag and rolling calculations
 df_clean <- df_clean[complete.cases(df_clean), ]
 
 # Update numeric columns to include new features
-
 numeric_cols <- c('Global_active_power', 'Global_reactive_power', 'Voltage','Global_intensity',
                   'Sub_metering_1','Sub_metering_2','Sub_metering_3', 'Total_sub_metering')
 
@@ -146,18 +142,16 @@ numeric_cols <- c('Global_active_power', 'Global_reactive_power', 'Voltage','Glo
 df_scaled <- df_clean
 df_scaled[numeric_cols] <- scale(df_scaled[numeric_cols])
 
-# check the scaling results making sure Mean = 0
+# Check the scaling results making sure Mean = 0
 cat("Summary of Scaled Variables:\n")
 print(summary(df_scaled[numeric_cols]))
 
-# making sure SD = 1 
+# Making sure SD = 1 
 col_sds <- sapply(df_scaled[numeric_cols], sd, na.rm = TRUE)
 
 # Display the standard deviations
 cat("Standard Deviations of All Columns:\n")
 print(col_sds)
-
-
 
 # ************************************
 # Principal Component Analysis (PCA)
@@ -183,8 +177,7 @@ for (i in 1:length(pca_var_perc)) {
   cat(paste0("PC", i, ": ", round(pca_var_perc[i], 2), "%\n"))
 }
 
-
-# add PCA scores to the dataframe
+# Add PCA scores to the dataframe
 df_scaled$PC1 <- pca_result$x[,1]
 df_scaled$PC2 <- pca_result$x[,2]
 
@@ -207,13 +200,10 @@ ggplot(data = melted_cor, aes(x = Var1, y = Var2, fill = value)) +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, 
                                    size = 10, hjust = 1))
 
-
-# extracting the loadings (rotation matrix) from the PCA results
-# the values in the matrix show the contributions of each variable
-# to the principal components
+# Extracting the loadings (rotation matrix) from the PCA results
 loadings <- pca_result$rotation
 
-# scaling the loadings for better visualization 
+# Scaling the loadings for better visualization 
 scale_factor <- 5
 loadings_scaled <- loadings[, 1:2] * scale_factor
 
@@ -230,7 +220,7 @@ ggplot(df_scaled, aes(x = PC1, y = PC2, color = "green")) +
   scale_color_brewer(palette = "Dark2") +
   geom_segment(data = arrow_data, aes(x = 0, y = 0, xend = PC1, yend = PC2), 
                arrow = arrow(type = "closed", length = unit(0.2, "cm")), 
-               color = "blue", size = 1) +  
+               color = "blue", linewidth = 1) +  # Replace size with linewidth
   geom_text(data = arrow_data, aes(x = PC1, y = PC2, label = Feature), 
             hjust = 1.2, vjust = 1.2, size = 4, color = "darkred") + 
   labs(
@@ -250,14 +240,11 @@ pca_result <- prcomp(df_scaled[numeric_cols])
 loadings <- pca_result$rotation
 print(loadings)
 
-
-
 df_scaled$Year <- year(df_scaled$DateTime)
 
 # ************************************
 # Splitting train and test data
 # ************************************
-                               
 train_data <- df_scaled %>% filter(Year <= 2008)
 test_data <- df_scaled %>% filter(Year == 2009)
 
@@ -273,10 +260,6 @@ states_list <- c(4, 6, 8, 10, 12, 16)
 
 # 2. Adjust EM algorithm control parameters
 em_ctrl <- em.control(maxit = 1000, tol = 1e-5)
-
-# Optional: 3. Sample 50% of the training data to reduce size
-# Comment this out if you want to use all data
-# train_features <- train_features %>% sample_frac(0.5)
 
 # Initialize lists to store results
 log_likelihoods <- list()
@@ -339,7 +322,6 @@ best_model <- models[[as.character(best_num_states)]]
 # Save the best model
 saveRDS(best_model, file = "training_model.rds")
 
-
 cat("\nTraining Results Summary:\n")
 result_df <- data.frame(
   States = states_list,
@@ -348,12 +330,12 @@ result_df <- data.frame(
 )
 print(result_df)
 
-# plotting BIC and log-liklihood
+# Plotting BIC and log-likelihood
 ggplot(result_df, aes(x = States)) +
-  geom_line(aes(y = BIC, color = "BIC"), size = 1) +
+  geom_line(aes(y = BIC, color = "BIC"), linewidth = 1) +
   geom_point(aes(y = BIC, color = "BIC"), size = 3) +
   
-  geom_line(aes(y = LogLikelihood, color = "Log-Likelihood"), size = 1) +
+  geom_line(aes(y = LogLikelihood, color = "Log-Likelihood"), linewidth = 1) +
   geom_point(aes(y = LogLikelihood, color = "Log-Likelihood"), size = 3) +
   labs(
     title = "BIC and Log Likelihood for Different Number of States",
@@ -370,12 +352,11 @@ ggplot(result_df, aes(x = States)) +
     axis.title.x = element_text(size = 12)
   )
 
-
 # ************************************
 # Evaluating Performance on Test Data
 # ************************************
 
-# using the best model parameters to predict on test data
+# Using the best model parameters to predict on test data
 test_model <- depmix(
   response = list(Global_intensity ~ 1, Voltage ~ 1),
   data = test_features,
@@ -383,12 +364,12 @@ test_model <- depmix(
   family = list(gaussian(), gaussian())
 )
 
-# setting parameters from the best model
+# Setting parameters from the best model
 test_fitted <- setpars(test_model, getpars(best_model))
-test_fitted <- fit(test_fitted, emcontrol = em_ctrl, verbose = FALSE)
 
-# extracting log-likelihood for the test data
-test_log_likelihood <- logLik(test_fitted)
+# Compute the log-likelihood without re-fitting
+fb_test <- forwardbackward(test_fitted)
+test_log_likelihood <- fb_test$logLike
 cat("Log-Likelihood on Test Data:", test_log_likelihood, "\n")
 
 # ************************************
@@ -397,7 +378,7 @@ cat("Log-Likelihood on Test Data:", test_log_likelihood, "\n")
 
 # Plot BIC vs Number of States
 ggplot(result_df, aes(x = States, y = BIC)) +
-  geom_line(color = "blue", size = 1) +
+  geom_line(color = "blue", linewidth = 1) +
   geom_point(color = "red", size = 3) +
   labs(title = "BIC vs. Number of States",
        x = "Number of States",
@@ -406,7 +387,7 @@ ggplot(result_df, aes(x = States, y = BIC)) +
 
 # Plot Log-Likelihood vs Number of States
 ggplot(result_df, aes(x = States, y = LogLikelihood)) +
-  geom_line(color = "blue", size = 1) +
+  geom_line(color = "blue", linewidth = 1) +
   geom_point(color = "red", size = 3) +
   labs(title = "Log-Likelihood vs. Number of States",
        x = "Number of States",
@@ -416,6 +397,7 @@ ggplot(result_df, aes(x = States, y = LogLikelihood)) +
 # ******************************
 # Anomaly Detection Optimization
 # ******************************
+
 # Partition into 10 roughly equal-sized subsets
 test_data_partition <- test_data %>%
   mutate(week_group = ntile(row_number(), 10))
@@ -430,12 +412,12 @@ subset_data_frame <- data.frame(
   avg_loglikelihood = numeric(10)
 )
 
-# Optimize anomaly detection loop
-for (i in 1:10) { # HAS BUG NEEDS TO BE FIXED!!!!!!!!!
+# Anomaly detection loop without using setdata
+for (i in 1:10) {
   subset_data <- weekly_subsets[[i]]
-  
   subset_features <- subset_data[, c("Global_intensity", "Voltage")]
   
+  # Create a new model with the subset data
   hmm_model_subset <- depmix(
     response = list(Global_intensity ~ 1, Voltage ~ 1),
     data = subset_features,
@@ -443,14 +425,12 @@ for (i in 1:10) { # HAS BUG NEEDS TO BE FIXED!!!!!!!!!
     family = list(gaussian(), gaussian())
   )
   
-  # Set parameters from the best model
+  # Set the parameters from the best model
   hmm_model_subset <- setpars(hmm_model_subset, getpars(best_model))
   
-  # Fit the model with fewer iterations and higher tolerance
-  hmm_model_subset <- fit(hmm_model_subset, emcontrol = em_ctrl, verbose = FALSE)
-  
-  # Calculate log-likelihood
-  loglikelihood_subset <- logLik(hmm_model_subset)
+  # Compute the log-likelihood without re-fitting
+  fb <- forwardbackward(hmm_model_subset)
+  loglikelihood_subset <- fb$logLike
   ll_per_obs <- loglikelihood_subset / nrow(subset_features)
   
   # Store the results
@@ -465,39 +445,36 @@ threshold <- max(abs(subset_data_frame$Deviation))
 cat("Threshold for the acceptable deviation of any unseen observations:", threshold, "\n")
 print(subset_data_frame)
 
-
-
-
 # ************************************
-# Display results
+# Display Results
 # ************************************
 
-# plot of BIC vs # of states
+# Plot of BIC vs Number of States
 ggplot(result_df, aes(x = States, y = BIC)) +
-  geom_line(color = "blue", size = 1) +
+  geom_line(color = "blue", linewidth = 1) +
   geom_point(color = "red", size = 3) +
   labs(title = "BIC vs. Number of States",
        x = "Number of States",
        y = "BIC Value") +
   theme_minimal()
 
-
+# Plot of Log-Likelihood vs Number of States
 ggplot(result_df, aes(x = States, y = LogLikelihood)) +
-  geom_line(color = "blue", size = 1) +
+  geom_line(color = "blue", linewidth = 1) +
   geom_point(color = "red", size = 3) +
-  labs(title = "Log-liklihood vs. Number of States",
+  labs(title = "Log-Likelihood vs. Number of States",
        x = "Number of States",
-       y = "Log-liklihood") +
+       y = "Log-Likelihood") +
   theme_minimal()
 
-
+# Combined Plot of BIC and Log-Likelihood
 ggplot(result_df, aes(x = States)) +
-  geom_line(aes(y = BIC, color = "BIC"), size = 1) +
+  geom_line(aes(y = BIC, color = "BIC"), linewidth = 1) +
   geom_point(aes(y = BIC, color = "BIC"), size = 3) +
   
-  geom_line(aes(y = LogLikelihood, color = "Log-Likelihood"), size = 1) +
+  geom_line(aes(y = LogLikelihood, color = "Log-Likelihood"), linewidth = 1) +
   geom_point(aes(y = LogLikelihood, color = "Log-Likelihood"), size = 3) +
-    labs(
+  labs(
     title = "BIC and Log Likelihood for Different Number of States",
     x = "Number of States",
     y = "Value",
@@ -511,4 +488,3 @@ ggplot(result_df, aes(x = States)) +
     axis.title.y = element_text(size = 12),
     axis.title.x = element_text(size = 12)
   )
-
