@@ -29,23 +29,12 @@ library("car")
 library(doParallel)
 library(foreach)
 
-# ******************************
-#  Read the Dataset 
-# ******************************
-
-
-# Define the file path
 file_path <- "/Users/koushaamouzesh/Desktop/Fall 2024/318/term project/group_project/TermProjectData.txt"
 
-# Read the data using data.table's fread for efficiency
 df <- fread(file_path, header = TRUE, sep = ",", na.strings = "NA", stringsAsFactors = FALSE)
 
 # converting to data.frame if necessary
 df <- as.data.frame(df)
-
-# ***********************************
-# Inspect the Dataframe Structure
-# ***********************************
 
 cat("First 10 rows of the dataframe:\n")
 head(df, 10)
@@ -60,7 +49,6 @@ colnames(df)
 df$DateTime <- paste(df$Date, df$Time)
 df$DateTime <- as.POSIXct(df$DateTime, format="%d/%m/%Y %H:%M:%S", tz = "UTC")
 
-# verifying the conversion
 cat("DateTime conversion completed.\n")
 str(df$DateTime)
 
@@ -269,9 +257,9 @@ df_scaled$Year <- year(df_scaled$DateTime)
 # ************************************
 # Splitting train and test data
 # ************************************
+                               
 train_data <- df_scaled %>% filter(Year <= 2008)
 test_data <- df_scaled %>% filter(Year == 2009)
-
 
 train_features <- train_data[, c("Global_intensity","Voltage")]
 test_features <- test_data[, c("Global_intensity","Voltage")]
