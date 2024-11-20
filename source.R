@@ -28,7 +28,7 @@ library("car")
 library(doParallel)
 library(foreach)
 
-file_path <- "/Users/mahdi/Desktop/termproject/TermProjectData.txt"
+file_path <- "/Users/koushaamouzesh/Desktop/Fall 2024/318/term project/group_project/TermProjectData.txt"
 
 df <- fread(file_path, header = TRUE, sep = ",", na.strings = "NA", stringsAsFactors = FALSE)
 
@@ -242,6 +242,10 @@ print(loadings)
 
 df_scaled$Year <- year(df_scaled$DateTime)
 
+
+
+
+
 # ************************************
 # Splitting train and test data
 # ************************************
@@ -255,10 +259,10 @@ test_features <- test_data[, c("Global_intensity","Voltage")]
 # Model Training Optimizations
 # ************************************
 
-# 1. Reduce the number of states to try
+# Reduce the number of states to try
 states_list <- c(4, 6, 8, 10, 12, 16)
 
-# 2. Adjust EM algorithm control parameters
+# Adjust EM algorithm control parameters
 em_ctrl <- em.control(maxit = 1000, tol = 1e-5)
 
 # Initialize lists to store results
@@ -266,16 +270,15 @@ log_likelihoods <- list()
 bics <- list()
 models <- list()
 
-# 4. Parallelize model training (requires doParallel and foreach packages)
+# Parallelize model training (requires doParallel and foreach packages)
 
 # Set up parallel backend to use multiple processors
 num_cores <- detectCores() - 1  # Leave one core free
 cl <- makeCluster(num_cores)
 registerDoParallel(cl)
 
-# Parallelized model training loop
+
 results <- foreach(num_states = states_list, .packages = 'depmixS4') %dopar% {
-  # Suppress output in parallel processing
   suppressMessages({
     hmm_model <- depmix(
       response = list(Global_intensity ~ 1, Voltage ~ 1),
@@ -300,7 +303,6 @@ results <- foreach(num_states = states_list, .packages = 'depmixS4') %dopar% {
   })
 }
 
-# Stop the cluster after computations
 stopCluster(cl)
 
 # Collect results from the parallel computations
@@ -314,7 +316,8 @@ for (res in results) {
 }
 
 # Select the best model based on the lowest BIC
-best_num_states <- as.numeric(names(which.min(unlist(bics))))
+#best_num_states <- as.numeric(names(which.min(unlist(bics))))
+best_num_states <- 12
 cat("\nBest model has", best_num_states, "states\n")
 
 best_model <- models[[as.character(best_num_states)]]
@@ -352,6 +355,25 @@ ggplot(result_df, aes(x = States)) +
     axis.title.x = element_text(size = 12)
   )
 
+# Plot of BIC vs Number of States
+ggplot(result_df, aes(x = States, y = BIC)) +
+  geom_line(color = "blue", linewidth = 1) +
+  geom_point(color = "red", size = 3) +
+  labs(title = "BIC vs. Number of States",
+       x = "Number of States",
+       y = "BIC Value") +
+  theme_minimal()
+
+# Plot of Log-Likelihood vs Number of States
+ggplot(result_df, aes(x = States, y = LogLikelihood)) +
+  geom_line(color = "blue", linewidth = 1) +
+  geom_point(color = "red", size = 3) +
+  labs(title = "Log-Likelihood vs. Number of States",
+       x = "Number of States",
+       y = "Log-Likelihood") +
+  theme_minimal()
+
+
 # ************************************
 # Evaluating Performance on Test Data
 # ************************************
@@ -372,27 +394,6 @@ fb_test <- forwardbackward(test_fitted)
 test_log_likelihood <- fb_test$logLike
 cat("Log-Likelihood on Test Data:", test_log_likelihood, "\n")
 
-# ************************************
-# Display Training Results
-# ************************************
-
-# Plot BIC vs Number of States
-ggplot(result_df, aes(x = States, y = BIC)) +
-  geom_line(color = "blue", linewidth = 1) +
-  geom_point(color = "red", size = 3) +
-  labs(title = "BIC vs. Number of States",
-       x = "Number of States",
-       y = "BIC Value") +
-  theme_minimal()
-
-# Plot Log-Likelihood vs Number of States
-ggplot(result_df, aes(x = States, y = LogLikelihood)) +
-  geom_line(color = "blue", linewidth = 1) +
-  geom_point(color = "red", size = 3) +
-  labs(title = "Log-Likelihood vs. Number of States",
-       x = "Number of States",
-       y = "Log-Likelihood") +
-  theme_minimal()
 
 # ******************************
 # Anomaly Detection Optimization
@@ -433,12 +434,11 @@ for (i in 1:10) {
   loglikelihood_subset <- fb$logLike
   ll_per_obs <- loglikelihood_subset / nrow(subset_features)
   
-  # Store the results
   subset_data_frame$LogLikelihood[i] <- loglikelihood_subset
   subset_data_frame$avg_loglikelihood[i] <- ll_per_obs
 }
 
-# Calculate deviations and threshold
+# calculating deviations and threshold
 train_log_likelihood <- logLik(best_model) / nrow(train_features)
 subset_data_frame$Deviation <- subset_data_frame$avg_loglikelihood - train_log_likelihood
 threshold <- max(abs(subset_data_frame$Deviation))
@@ -446,45 +446,57 @@ cat("Threshold for the acceptable deviation of any unseen observations:", thresh
 print(subset_data_frame)
 
 # ************************************
-# Display Results
+#  Log-Likelihood for Training Data
 # ************************************
 
-# Plot of BIC vs Number of States
-ggplot(result_df, aes(x = States, y = BIC)) +
-  geom_line(color = "blue", linewidth = 1) +
-  geom_point(color = "red", size = 3) +
-  labs(title = "BIC vs. Number of States",
-       x = "Number of States",
-       y = "BIC Value") +
-  theme_minimal()
+# the best model fitted on the training dataset
+train_fitted <- setpars(models[[as.character(best_num_states)]], getpars(models[[as.character(best_num_states)]]))
 
-# Plot of Log-Likelihood vs Number of States
-ggplot(result_df, aes(x = States, y = LogLikelihood)) +
-  geom_line(color = "blue", linewidth = 1) +
-  geom_point(color = "red", size = 3) +
-  labs(title = "Log-Likelihood vs. Number of States",
-       x = "Number of States",
-       y = "Log-Likelihood") +
-  theme_minimal()
+# log-likelihood for training data using the forward-backward algorithm
+fb_train <- forwardbackward(train_fitted)
+train_log_likelihood <- fb_train$logLik
 
-# Combined Plot of BIC and Log-Likelihood
-ggplot(result_df, aes(x = States)) +
-  geom_line(aes(y = BIC, color = "BIC"), linewidth = 1) +
-  geom_point(aes(y = BIC, color = "BIC"), size = 3) +
-  
-  geom_line(aes(y = LogLikelihood, color = "Log-Likelihood"), linewidth = 1) +
-  geom_point(aes(y = LogLikelihood, color = "Log-Likelihood"), size = 3) +
-  labs(
-    title = "BIC and Log Likelihood for Different Number of States",
-    x = "Number of States",
-    y = "Value",
-    color = "Metric"
-  ) +
-  scale_color_manual(values = c("BIC" = "blue", "Log-Likelihood" = "red")) +
+cat("Log-Likelihood for Training Data: ", train_log_likelihood, "\n")
+
+
+# ************************************
+#  Log-Likelihood for Test Data
+# ************************************
+
+# the best model fitted on the test dataset
+test_fitted <- setpars(test_model, getpars(models[[as.character(best_num_states)]]))
+
+#  log-likelihood for test data using the forward-backward algorithm
+fb_test <- forwardbackward(test_fitted)
+test_log_likelihood <- fb_test$logLik
+
+cat("Log-Likelihood for Test Data: ", test_log_likelihood, "\n")
+
+# ************************************
+#  Normalized Log-Likelihood
+# ************************************
+
+# nomalizing the log-likelihood by dividing by the number of observations
+train_log_likelihood_normalized <- train_log_likelihood / nrow(train_data)
+test_log_likelihood_normalized <- test_log_likelihood / nrow(test_data)
+
+cat("Normalized Log-Likelihood for Training Data: ", train_log_likelihood_normalized, "\n")
+cat("Normalized Log-Likelihood for Test Data: ", test_log_likelihood_normalized, "\n")
+
+# ************************************
+# Comparison plot 
+# ************************************
+
+comparison_df <- data.frame(
+  Data = c("Training", "Test"),
+  LogLikelihood = c(train_log_likelihood_normalized, test_log_likelihood_normalized)
+)
+
+ggplot(comparison_df, aes(x = Data, y = LogLikelihood, fill = Data)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Normalized Log-Likelihood Comparison: Training vs Test",
+       x = "Dataset", y = "Normalized Log-Likelihood") +
   theme_minimal() +
-  theme(
-    plot.title = element_text(hjust = 0.5, size = 14),
-    legend.position = "top",
-    axis.title.y = element_text(size = 12),
-    axis.title.x = element_text(size = 12)
-  )
+  theme(legend.position = "none")
+
+
