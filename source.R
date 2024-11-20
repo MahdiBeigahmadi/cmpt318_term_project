@@ -289,7 +289,7 @@ results <- foreach(num_states = states_list, .packages = 'depmixS4') %dopar% {
 
 stopCluster(cl)
 
-# It collect results from the parallel computations
+# It collects results from the parallel computations
 for (res in results) {
   num_states <- res$num_states
   log_likelihoods[[as.character(num_states)]] <- res$log_likelihood
