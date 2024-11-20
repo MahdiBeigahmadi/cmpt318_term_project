@@ -32,6 +32,7 @@ file_path <- "/Users/koushaamouzesh/Desktop/Fall 2024/318/term project/group_pro
 
 df <- fread(file_path, header = TRUE, sep = ",", na.strings = "NA", stringsAsFactors = FALSE)
 
+# Converting to data.frame if necessary
 df <- as.data.frame(df)
 
 cat("First 10 rows of the dataframe:\n")
@@ -53,27 +54,33 @@ str(df$DateTime)
 # Extract Time Window on Monday (09:00 AM to 12:00 PM)
 # ******************************
 
+# Define the function to extract the time window
 extract_time_window <- function(dataframe) {
   df_monday_9am_to_12pm <- dataframe %>%
-    filter(weekdays(DateTime) == "Monday" & hour(DateTime) >= 9 & hour(DateTime) < 12)
+    filter(weekdays(DateTime) == "Monday" &
+             hour(DateTime) >= 9 & hour(DateTime) < 12)
   return(df_monday_9am_to_12pm)
 }
 
-df <- extract_time_window(df)
+# Now, apply the function to the dataframe
+# df <- extract_time_window(df)
 
-cat("Extracted Time Window Data (09:00 AM to 12:00 PM on Monday):\n")
+# View the extracted time window data
+#cat("Extracted Time Window Data (09:00 AM to 12:00 PM on Monday):\n")
 print(head(df))
 
 # ******************************
-# Converting Columns to Numeric
+# Convert Columns to Numeric
 # ******************************
 
+# Convert numeric columns to numeric type
 numeric_cols <- c("Global_active_power", "Global_reactive_power", "Voltage", 
                   "Global_intensity", "Sub_metering_1", "Sub_metering_2", 
                   "Sub_metering_3")
 
 df[numeric_cols] <- lapply(df[numeric_cols], function(x) as.numeric(x))
 
+# Checking for conversion success
 if(any(sapply(df[numeric_cols], function(x) any(is.na(x))))){
   cat("Warning: Some numeric columns have NA values after conversion.\n")
 } else {
@@ -84,6 +91,7 @@ if(any(sapply(df[numeric_cols], function(x) any(is.na(x))))){
 # Handling the Missing Values
 # ******************************
 
+# Check for missing values
 missing_values <- sapply(df[numeric_cols], function(x) sum(is.na(x)))
 cat("Missing Values in Each Numeric Column:\n")
 print(missing_values)
@@ -113,7 +121,8 @@ df_clean <- df
 
 # Creating new features based on domain knowledge
 
-df_clean$Total_sub_metering <- df_clean$Sub_metering_1 + df_clean$Sub_metering_2 + df_clean$Sub_metering_3
+# Total Sub Metering
+#df_clean$Total_sub_metering <- df_clean$Sub_metering_1 + df_clean$Sub_metering_2 + df_clean$Sub_metering_3
 
 # Time-based features
 df_clean$Hour <- as.integer(format(df_clean$DateTime, "%H"))
@@ -123,9 +132,9 @@ df_clean$Month <- as.factor(format(df_clean$DateTime, "%m"))
 # Removing initial rows with NA due to lag and rolling calculations
 df_clean <- df_clean[complete.cases(df_clean), ]
 
-# Updates numeric columns to include new features
+# Update numeric columns to include new features
 numeric_cols <- c('Global_active_power', 'Global_reactive_power', 'Voltage','Global_intensity',
-                  'Sub_metering_1','Sub_metering_2','Sub_metering_3', 'Total_sub_metering')
+                  'Sub_metering_1','Sub_metering_2','Sub_metering_3')
 
 # ************************************
 # Feature Scaling (Standardization)
@@ -134,13 +143,14 @@ numeric_cols <- c('Global_active_power', 'Global_reactive_power', 'Voltage','Glo
 df_scaled <- df_clean
 df_scaled[numeric_cols] <- scale(df_scaled[numeric_cols])
 
-# it checks the scaling results making sure Mean = 0
+# Check the scaling results making sure Mean = 0
 cat("Summary of Scaled Variables:\n")
 print(summary(df_scaled[numeric_cols]))
 
 # Making sure SD = 1 
 col_sds <- sapply(df_scaled[numeric_cols], sd, na.rm = TRUE)
 
+# Display the standard deviations
 cat("Standard Deviations of All Columns:\n")
 print(col_sds)
 
@@ -148,22 +158,30 @@ print(col_sds)
 # Principal Component Analysis (PCA)
 # ************************************
 
-# it prepares data for PCA
+# preparing data for PCA
 pca_data <- df_scaled[numeric_cols]
 
+# performing PCA
 pca_result <- prcomp(pca_data, center = FALSE, scale. = FALSE)
 
+# Summary of PCA results
 cat("PCA Summary:\n")
 print(summary(pca_result))
 
-# Variance percentages of all PCs
+# variance percentages of all PCs
 pca_var <- pca_result$sdev^2
 pca_var_perc <- pca_var / sum(pca_var) * 100
 
+# Print variance percentages of all PCs
 cat("Variance percentages of all Principal Components:\n")
 for (i in 1:length(pca_var_perc)) {
-  cat(paste0("PC", i, ": ", round(pca_var_perc[i], 2), "%\n"))
+  cat(paste0("PC", i, ": ", round(pca_var_perc[i], 2), "% "))
 }
+
+fviz_eig(pca_result, addlabels = TRUE, ylim = c(0, 50)) +
+  labs(title = "Variance Percentage vs Principal Component",
+       x = "Principal Components",
+       y = "Percentage of Variance Explained")
 
 # Add PCA scores to the dataframe
 df_scaled$PC1 <- pca_result$x[,1]
@@ -191,11 +209,11 @@ ggplot(data = melted_cor, aes(x = Var1, y = Var2, fill = value)) +
 # Extracting the loadings (rotation matrix) from the PCA results
 loadings <- pca_result$rotation
 
-# Scaling the loadings for better visualization 
+# scaling the loadings for better visualization 
 scale_factor <- 5
 loadings_scaled <- loadings[, 1:2] * scale_factor
 
-# Preparing a data frame for the loadings (arrows)
+# preparing a data frame for the loadings (arrows)
 arrow_data <- data.frame(
   Feature = rownames(loadings_scaled),
   PC1 = loadings_scaled[, 1],
@@ -203,25 +221,23 @@ arrow_data <- data.frame(
 )
 
 # PCA plot PC1 vs PC2
-ggplot(df_scaled, aes(x = PC1, y = PC2, color = "green")) +
-  geom_jitter(alpha = 0.5, size = 2, width = 0.2, height = 0.2) +  # Jitter to reduce overlap
-  scale_color_brewer(palette = "Dark2") +
+ggplot(df_scaled, aes(x = PC1, y = PC2, color = "green2")) +
+  geom_jitter(alpha = 0.5, size = 2, width = 0.2, height = 0.2) + 
+  scale_color_brewer() +
   geom_segment(data = arrow_data, aes(x = 0, y = 0, xend = PC1, yend = PC2), 
                arrow = arrow(type = "closed", length = unit(0.2, "cm")), 
-               color = "blue", linewidth = 1) +  # Replace size with linewidth
+               color = "blue", linewidth = 1) +  
   geom_text(data = arrow_data, aes(x = PC1, y = PC2, label = Feature), 
-            hjust = 1.2, vjust = 1.2, size = 4, color = "darkred") + 
+            hjust = 1.2, vjust = 1.2, size = 5, color = "black") + 
   labs(
-    title = "Simplified PCA Scatter Plot with Feature Arrows",
+    title = "PCA Scatter Plot: Feature Contribution",
     x = "Principal Component 1",
     y = "Principal Component 2",
-    color = "Day of the Week"
   ) +
   theme_minimal() +
   theme(
     plot.title = element_text(hjust = 0.5, size = 16),
     axis.title = element_text(size = 14),
-    legend.position = "bottom"
   )
 
 pca_result <- prcomp(df_scaled[numeric_cols])
@@ -230,10 +246,21 @@ print(loadings)
 
 df_scaled$Year <- year(df_scaled$DateTime)
 
+print(pca_result$rotation[2,0])
+
+# PC1 scores for each variable
+loading_scores <- pca_result$rotation[, 1]
+# top two features magnitude (highest ones)
+most_influential_features <- names(sort(abs(loading_scores), decreasing = TRUE)[1:2])
+
+print(most_influential_features)
+
 
 # ************************************
 # Splitting train and test data
 # ************************************
+df_scaled <- extract_time_window(df_scaled)
+
 train_data <- df_scaled %>% filter(Year <= 2008)
 test_data <- df_scaled %>% filter(Year == 2009)
 
@@ -244,19 +271,20 @@ test_features <- test_data[, c("Global_intensity","Voltage")]
 # Model Training Optimizations
 # ************************************
 
-# Reducing the number of states to avoid overfitting 
-states_list <- c(4, 6, 8, 10, 12, 16)
+# Reduce the number of states to try
+states_list <- c(4, 6, 8, 10, 12, 13)
 
-# Adjusting EM algorithm control parameters
+# Adjust EM algorithm control parameters
 em_ctrl <- em.control(maxit = 1000, tol = 1e-5)
 
-# Initializes lists to store results
+# Initialize lists to store results
 log_likelihoods <- list()
 bics <- list()
 models <- list()
 
+# Parallelize model training (requires doParallel and foreach packages)
 
-# It sets up parallel backend to use multiple processors
+# Set up parallel backend to use multiple processors
 num_cores <- detectCores() - 1  # Leave one core free
 cl <- makeCluster(num_cores)
 registerDoParallel(cl)
@@ -265,7 +293,7 @@ registerDoParallel(cl)
 results <- foreach(num_states = states_list, .packages = 'depmixS4') %dopar% {
   suppressMessages({
     hmm_model <- depmix(
-      response = list(Global_intensity ~ 1, Voltage ~ 1),
+      response = list( Global_intensity ~ 1, Voltage ~ 1),
       data = train_features,
       nstates = num_states,
       family = list(gaussian(), gaussian())
@@ -289,7 +317,7 @@ results <- foreach(num_states = states_list, .packages = 'depmixS4') %dopar% {
 
 stopCluster(cl)
 
-# It collects results from the parallel computations
+# Collect results from the parallel computations
 for (res in results) {
   num_states <- res$num_states
   log_likelihoods[[as.character(num_states)]] <- res$log_likelihood
@@ -299,13 +327,14 @@ for (res in results) {
   cat("BIC for", num_states, "states:", res$bic_value, "\n")
 }
 
-# Selection of the best model based on the lowest BIC
-# best_num_states <- as.numeric(names(which.min(unlist(bics))))
-best_num_states <- 12
+# Select the best model based on the lowest BIC
+best_num_states <- as.numeric(names(which.min(unlist(bics))))
+#best_num_states <- 12
 cat("\nBest model has", best_num_states, "states\n")
 
 best_model <- models[[as.character(best_num_states)]]
 
+# Save the best model
 saveRDS(best_model, file = "training_model.rds")
 
 cat("\nTraining Results Summary:\n")
@@ -372,7 +401,7 @@ test_model <- depmix(
 # Setting parameters from the best model
 test_fitted <- setpars(test_model, getpars(best_model))
 
-# it computes the log-likelihood without re-fitting
+# Compute the log-likelihood without re-fitting
 fb_test <- forwardbackward(test_fitted)
 test_log_likelihood <- fb_test$logLike
 cat("Log-Likelihood on Test Data:", test_log_likelihood, "\n")
@@ -382,14 +411,14 @@ cat("Log-Likelihood on Test Data:", test_log_likelihood, "\n")
 # Anomaly Detection Optimization
 # ******************************
 
-# Partitioning into 10 roughly equal-sized subsets
+# Partition into 10 roughly equal-sized subsets
 test_data_partition <- test_data %>%
   mutate(week_group = ntile(row_number(), 10))
 
 weekly_subsets <- test_data_partition %>%
   group_split(week_group)
 
-# It initializes data frame to store results
+# Initialize data frame to store results
 subset_data_frame <- data.frame(
   week_group = 1:10,
   LogLikelihood = numeric(10),
@@ -401,7 +430,7 @@ for (i in 1:10) {
   subset_data <- weekly_subsets[[i]]
   subset_features <- subset_data[, c("Global_intensity", "Voltage")]
   
-  # Creating a new model with the subset data
+  # Create a new model with the subset data
   hmm_model_subset <- depmix(
     response = list(Global_intensity ~ 1, Voltage ~ 1),
     data = subset_features,
@@ -409,10 +438,10 @@ for (i in 1:10) {
     family = list(gaussian(), gaussian())
   )
   
-  # Setting the parameters from the best model
+  # choosing the parameters from the best model
   hmm_model_subset <- setpars(hmm_model_subset, getpars(best_model))
   
-  # Computation of the log-likelihood without re-fitting
+  # computing the log-likelihood without re-fitting
   fb <- forwardbackward(hmm_model_subset)
   loglikelihood_subset <- fb$logLike
   ll_per_obs <- loglikelihood_subset / nrow(subset_features)
@@ -449,7 +478,7 @@ cat("Log-Likelihood for Training Data: ", train_log_likelihood, "\n")
 # the best model fitted on the test dataset
 test_fitted <- setpars(test_model, getpars(models[[as.character(best_num_states)]]))
 
-# log-likelihood for test data using the forward-backward algorithm
+#  log-likelihood for test data using the forward-backward algorithm
 fb_test <- forwardbackward(test_fitted)
 test_log_likelihood <- fb_test$logLik
 
@@ -481,4 +510,5 @@ ggplot(comparison_df, aes(x = Data, y = LogLikelihood, fill = Data)) +
        x = "Dataset", y = "Normalized Log-Likelihood") +
   theme_minimal() +
   theme(legend.position = "none")
+
 
