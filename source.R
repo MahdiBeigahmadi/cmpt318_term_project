@@ -51,7 +51,7 @@ str(df$DateTime)
 # Extract Time Window on Monday (09:00 AM to 12:00 PM)
 # ******************************
 
-# Define the function to extract the time window
+# Defines the function to extract the time window
 extract_time_window <- function(dataframe) {
   df_monday_9am_to_12pm <- dataframe %>%
     filter(weekdays(DateTime) == "Monday" &
@@ -65,7 +65,7 @@ print(head(df))
 # Convert Columns to Numeric
 # ******************************
 
-# Convert numeric columns to numeric type
+# Converts numeric columns to numeric type
 numeric_cols <- c("Global_active_power", "Global_reactive_power", "Voltage", 
                   "Global_intensity", "Sub_metering_1", "Sub_metering_2", 
                   "Sub_metering_3")
@@ -121,7 +121,7 @@ df_clean$Month <- as.factor(format(df_clean$DateTime, "%m"))
 # Removing initial rows with NA due to lag and rolling calculations
 df_clean <- df_clean[complete.cases(df_clean), ]
 
-# Update numeric columns to include new features
+# Updates numeric columns to include new features
 numeric_cols <- c('Global_active_power', 'Global_reactive_power', 'Voltage','Global_intensity',
                   'Sub_metering_1','Sub_metering_2','Sub_metering_3')
 
@@ -132,14 +132,14 @@ numeric_cols <- c('Global_active_power', 'Global_reactive_power', 'Voltage','Glo
 df_scaled <- df_clean
 df_scaled[numeric_cols] <- scale(df_scaled[numeric_cols])
 
-# Check the scaling results making sure Mean = 0
+# Checks the scaling results making sure Mean = 0
 cat("Summary of Scaled Variables:\n")
 print(summary(df_scaled[numeric_cols]))
 
 # Making sure SD = 1 
 col_sds <- sapply(df_scaled[numeric_cols], sd, na.rm = TRUE)
 
-# Display the standard deviations
+# Displays the standard deviations
 cat("Standard Deviations of All Columns:\n")
 print(col_sds)
 
@@ -147,21 +147,21 @@ print(col_sds)
 # Principal Component Analysis (PCA)
 # ************************************
 
-# preparing data for PCA
+# Preparing data for PCA
 pca_data <- df_scaled[numeric_cols]
 
-# performing PCA
+# Performing PCA
 pca_result <- prcomp(pca_data, center = FALSE, scale. = FALSE)
 
 # Summary of PCA results
 cat("PCA Summary:\n")
 print(summary(pca_result))
 
-# variance percentages of all PCs
+# Variance percentages of all PCs
 pca_var <- pca_result$sdev^2
 pca_var_perc <- pca_var / sum(pca_var) * 100
 
-# Print variance percentages of all PCs
+# Prints variance percentages of all PCs
 cat("Variance percentages of all Principal Components:\n")
 for (i in 1:length(pca_var_perc)) {
   cat(paste0("PC", i, ": ", round(pca_var_perc[i], 2), "% "))
@@ -172,7 +172,7 @@ fviz_eig(pca_result, addlabels = TRUE, ylim = c(0, 50)) +
        x = "Principal Components",
        y = "Percentage of Variance Explained")
 
-# Add PCA scores to the dataframe
+# Adds PCA scores to the dataframe
 df_scaled$PC1 <- pca_result$x[,1]
 df_scaled$PC2 <- pca_result$x[,2]
 
@@ -198,11 +198,11 @@ ggplot(data = melted_cor, aes(x = Var1, y = Var2, fill = value)) +
 # Extracting the loadings (rotation matrix) from the PCA results
 loadings <- pca_result$rotation
 
-# scaling the loadings for better visualization 
+# Scaling the loadings for better visualization 
 scale_factor <- 5
 loadings_scaled <- loadings[, 1:2] * scale_factor
 
-# preparing a data frame for the loadings (arrows)
+# Preparing a data frame for the loadings (arrows)
 arrow_data <- data.frame(
   Feature = rownames(loadings_scaled),
   PC1 = loadings_scaled[, 1],
@@ -239,7 +239,8 @@ print(pca_result$rotation[2,0])
 
 # PC1 scores for each variable
 loading_scores <- pca_result$rotation[, 1]
-# top two features magnitude (highest ones)
+                               
+# Top two features magnitude (highest ones)
 most_influential_features <- names(sort(abs(loading_scores), decreasing = TRUE)[1:2])
 
 print(most_influential_features)
@@ -270,7 +271,7 @@ log_likelihoods <- list()
 bics <- list()
 models <- list()
 
-# Parallelize model training (it requires doParallel and foreach packages)
+# Parallelizes model training (it requires doParallel and foreach packages)
 
 # Setting up parallel backend to use multiple processors
 num_cores <- detectCores()   
@@ -305,7 +306,7 @@ results <- foreach(num_states = states_list, .packages = 'depmixS4') %dopar% {
 
 stopCluster(cl)
 
-# Collect results from the parallel computations
+# Collects results from the parallel computations
 for (res in results) {
   num_states <- res$num_states
   log_likelihoods[[as.character(num_states)]] <- res$log_likelihood
@@ -399,7 +400,7 @@ for (i in 1:10) {
   subset_data <- weekly_subsets[[i]]
   subset_features <- subset_data[, c("Global_intensity", "Voltage")]
   
-  # Create a new model with the subset data
+  # Creates a new model with the subset data
   hmm_model_subset <- depmix(
     response = list(Global_intensity ~ 1, Voltage ~ 1),
     data = subset_features,
@@ -407,10 +408,10 @@ for (i in 1:10) {
     family = list(gaussian(), gaussian())
   )
   
-  # choosing the parameters from the best model
+  # Choosing the parameters from the best model
   hmm_model_subset <- setpars(hmm_model_subset, getpars(best_model))
   
-  # computing the log-likelihood without re-fitting
+  # Computing the log-likelihood without re-fitting
   fb <- forwardbackward(hmm_model_subset)
   loglikelihood_subset <- fb$logLike
   normalize_loglikelihood_subset <- loglikelihood_subset / nrow(subset_features)
@@ -419,7 +420,7 @@ for (i in 1:10) {
   subset_data_frame$avg_loglikelihood[i] <- normalize_loglikelihood_subset
 }
 
-# calculating deviations and threshold
+# Calculating deviations and threshold
 train_log_likelihood <- forwardbackward(best_model)$logLike / nrow(train_features)
 subset_data_frame$Deviation <- subset_data_frame$avg_loglikelihood - train_log_likelihood
 threshold <- max(abs(subset_data_frame$Deviation))
@@ -430,10 +431,10 @@ print(subset_data_frame)
 #  Log-Likelihood for Training Data
 # ************************************
 
-# the best model fitted on the training dataset
+# The best model fitted on the training dataset
 train_fitted <- setpars(models[[as.character(best_num_states)]], getpars(models[[as.character(best_num_states)]]))
 
-# log-likelihood for training data using the forward-backward algorithm
+# Log-likelihood for training data using the forward-backward algorithm
 fb_train <- forwardbackward(train_fitted)
 train_log_likelihood <- fb_train$logLik
 
@@ -444,10 +445,10 @@ cat("Log-Likelihood for Training Data: ", train_log_likelihood, "\n")
 #  Log-Likelihood for Test Data
 # ************************************
 
-# the best model fitted on the test dataset
+# The best model fitted on the test dataset
 test_fitted <- setpars(test_model, getpars(models[[as.character(best_num_states)]]))
 
-#  log-likelihood for test data using the forward-backward algorithm
+#  Log-likelihood for test data using the forward-backward algorithm
 fb_test <- forwardbackward(test_fitted)
 test_log_likelihood <- fb_test$logLik
 
@@ -457,7 +458,7 @@ cat("Log-Likelihood for Test Data: ", test_log_likelihood, "\n")
 #  Normalized Log-Likelihood
 # ************************************
 
-# nomalizing the log-likelihood by dividing by the number of observations
+# Nomalizing the log-likelihood by dividing by the number of observations
 train_log_likelihood_normalized <- train_log_likelihood / nrow(train_data)
 test_log_likelihood_normalized <- test_log_likelihood / nrow(test_data)
 
