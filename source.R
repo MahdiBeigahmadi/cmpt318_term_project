@@ -1,8 +1,5 @@
-required_packages <- c("dplyr", "ggplot2", "depmixS4", "lubridate", "data.table", "devtools", "factoextra", "reshape2", "zoo")
-install.packages("car")
-install.packages('usethis')
-install.packages('doParallel')
-install.packages("foreach")
+required_packages <- c("dplyr", "ggplot2", "depmixS4", "lubridate", "data.table", "devtools", "factoextra", "reshape2", "zoo","car","usethis","doParallel","foreach")
+
 
 install_if_missing <- function(packages){
   installed <- rownames(installed.packages())
@@ -28,7 +25,7 @@ library("car")
 library(doParallel)
 library(foreach)
 
-file_path <- "/Users/koushaamouzesh/Desktop/Fall 2024/318/term project/group_project/TermProjectData.txt"
+file_path <- "C:/Users/Richard/Documents/SFUfall2024/CMPT318/TermProject/TermProjectData.txt"
 
 df <- fread(file_path, header = TRUE, sep = ",", na.strings = "NA", stringsAsFactors = FALSE)
 
@@ -272,7 +269,7 @@ test_features <- test_data[, c("Global_intensity","Voltage")]
 # ************************************
 
 # Reduce the number of states to try
-states_list <- c(4, 6, 8, 10, 12, 13)
+states_list <- c(4, 6, 7, 8, 10, 12, 13)
 
 # Adjust EM algorithm control parameters
 em_ctrl <- em.control(maxit = 1000, tol = 1e-5)
@@ -285,7 +282,7 @@ models <- list()
 # Parallelize model training (requires doParallel and foreach packages)
 
 # Set up parallel backend to use multiple processors
-num_cores <- detectCores() - 1  # Leave one core free
+num_cores <- detectCores()   # Leave one core free
 cl <- makeCluster(num_cores)
 registerDoParallel(cl)
 
@@ -301,7 +298,7 @@ results <- foreach(num_states = states_list, .packages = 'depmixS4') %dopar% {
     
     set.seed(42)
     print(paste0("train model state = ", num_states))
-    fitted_model <- fit(hmm_model, verbose = FALSE, emcontrol = em_ctrl)
+    fitted_model <- fit(hmm_model, ntimes = 10, verbose = FALSE, emcontrol = em_ctrl)
     
     log_likelihood <- logLik(fitted_model)
     bic_value <- BIC(fitted_model)
@@ -332,6 +329,10 @@ best_num_states <- as.numeric(names(which.min(unlist(bics))))
 #best_num_states <- 12
 cat("\nBest model has", best_num_states, "states\n")
 
+
+# TODO: REMOVE THIS LATER
+#############################################################################################################################
+best_num_states = 7
 best_model <- models[[as.character(best_num_states)]]
 
 # Save the best model
@@ -444,14 +445,15 @@ for (i in 1:10) {
   # computing the log-likelihood without re-fitting
   fb <- forwardbackward(hmm_model_subset)
   loglikelihood_subset <- fb$logLike
-  ll_per_obs <- loglikelihood_subset / nrow(subset_features)
+  normalize_loglikelihood_subset <- loglikelihood_subset / nrow(subset_features)
   
   subset_data_frame$LogLikelihood[i] <- loglikelihood_subset
-  subset_data_frame$avg_loglikelihood[i] <- ll_per_obs
+  subset_data_frame$avg_loglikelihood[i] <- normalize_loglikelihood_subset
 }
 
 # calculating deviations and threshold
-train_log_likelihood <- logLik(best_model) / nrow(train_features)
+#train_log_likelihood <- logLik(best_model) / nrow(train_features)
+train_log_likelihood <- forwardbackward(best_model)$logLike / nrow(train_features)
 subset_data_frame$Deviation <- subset_data_frame$avg_loglikelihood - train_log_likelihood
 threshold <- max(abs(subset_data_frame$Deviation))
 cat("Threshold for the acceptable deviation of any unseen observations:", threshold, "\n")
@@ -510,5 +512,3 @@ ggplot(comparison_df, aes(x = Data, y = LogLikelihood, fill = Data)) +
        x = "Dataset", y = "Normalized Log-Likelihood") +
   theme_minimal() +
   theme(legend.position = "none")
-
-
