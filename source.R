@@ -25,7 +25,7 @@ library("car")
 library(doParallel)
 library(foreach)
 
-file_path <- "C:/Users/Richard/Documents/SFUfall2024/CMPT318/TermProject/TermProjectData.txt"
+file_path <- "The location of the txt file goes here"
 
 df <- fread(file_path, header = TRUE, sep = ",", na.strings = "NA", stringsAsFactors = FALSE)
 
@@ -119,7 +119,7 @@ df_clean <- df
 # Creating new features based on domain knowledge
 
 # Total Sub Metering
-#df_clean$Total_sub_metering <- df_clean$Sub_metering_1 + df_clean$Sub_metering_2 + df_clean$Sub_metering_3
+# df_clean$Total_sub_metering <- df_clean$Sub_metering_1 + df_clean$Sub_metering_2 + df_clean$Sub_metering_3
 
 # Time-based features
 df_clean$Hour <- as.integer(format(df_clean$DateTime, "%H"))
@@ -324,16 +324,11 @@ for (res in results) {
   cat("BIC for", num_states, "states:", res$bic_value, "\n")
 }
 
-# Select the best model based on the lowest BIC
-best_num_states <- as.numeric(names(which.min(unlist(bics))))
-#best_num_states <- 12
-cat("\nBest model has", best_num_states, "states\n")
-
-
-# TODO: REMOVE THIS LATER
-#############################################################################################################################
 best_num_states = 7
 best_model <- models[[as.character(best_num_states)]]
+
+cat("The Best Model has", best_num_states, "states\n")
+print(best_model)
 
 # Save the best model
 saveRDS(best_model, file = "training_model.rds")
@@ -512,3 +507,4 @@ ggplot(comparison_df, aes(x = Data, y = LogLikelihood, fill = Data)) +
        x = "Dataset", y = "Normalized Log-Likelihood") +
   theme_minimal() +
   theme(legend.position = "none")
+
