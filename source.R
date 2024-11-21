@@ -25,7 +25,7 @@ library("car")
 library(doParallel)
 library(foreach)
 
-file_path <- "The location of the txt file goes here"
+file_path <- "The path for txt file"
 
 df <- fread(file_path, header = TRUE, sep = ",", na.strings = "NA", stringsAsFactors = FALSE)
 
@@ -59,11 +59,6 @@ extract_time_window <- function(dataframe) {
   return(df_monday_9am_to_12pm)
 }
 
-# Now, apply the function to the dataframe
-# df <- extract_time_window(df)
-
-# View the extracted time window data
-#cat("Extracted Time Window Data (09:00 AM to 12:00 PM on Monday):\n")
 print(head(df))
 
 # ******************************
@@ -88,7 +83,7 @@ if(any(sapply(df[numeric_cols], function(x) any(is.na(x))))){
 # Handling the Missing Values
 # ******************************
 
-# Check for missing values
+# Checking for missing values
 missing_values <- sapply(df[numeric_cols], function(x) sum(is.na(x)))
 cat("Missing Values in Each Numeric Column:\n")
 print(missing_values)
@@ -117,9 +112,6 @@ df_clean <- df
 # ******************************
 
 # Creating new features based on domain knowledge
-
-# Total Sub Metering
-# df_clean$Total_sub_metering <- df_clean$Sub_metering_1 + df_clean$Sub_metering_2 + df_clean$Sub_metering_3
 
 # Time-based features
 df_clean$Hour <- as.integer(format(df_clean$DateTime, "%H"))
@@ -264,25 +256,24 @@ test_data <- df_scaled %>% filter(Year == 2009)
 train_features <- train_data[, c("Global_intensity","Voltage")]
 test_features <- test_data[, c("Global_intensity","Voltage")]
 
+
 # ************************************
 # Model Training Optimizations
 # ************************************
-
-# Reduce the number of states to try
 states_list <- c(4, 6, 7, 8, 10, 12, 13)
 
-# Adjust EM algorithm control parameters
+# Adjusts EM algorithm control parameters
 em_ctrl <- em.control(maxit = 1000, tol = 1e-5)
 
-# Initialize lists to store results
+# Initializes lists to store results
 log_likelihoods <- list()
 bics <- list()
 models <- list()
 
-# Parallelize model training (requires doParallel and foreach packages)
+# Parallelize model training (it requires doParallel and foreach packages)
 
-# Set up parallel backend to use multiple processors
-num_cores <- detectCores()   # Leave one core free
+# Setting up parallel backend to use multiple processors
+num_cores <- detectCores()   
 cl <- makeCluster(num_cores)
 registerDoParallel(cl)
 
@@ -324,13 +315,13 @@ for (res in results) {
   cat("BIC for", num_states, "states:", res$bic_value, "\n")
 }
 
+
 best_num_states = 7
 best_model <- models[[as.character(best_num_states)]]
 
 cat("The Best Model has", best_num_states, "states\n")
 print(best_model)
 
-# Save the best model
 saveRDS(best_model, file = "training_model.rds")
 
 cat("\nTraining Results Summary:\n")
@@ -362,24 +353,6 @@ ggplot(result_df, aes(x = States)) +
     axis.title.y = element_text(size = 12),
     axis.title.x = element_text(size = 12)
   )
-
-# Plot of BIC vs Number of States
-ggplot(result_df, aes(x = States, y = BIC)) +
-  geom_line(color = "blue", linewidth = 1) +
-  geom_point(color = "red", size = 3) +
-  labs(title = "BIC vs. Number of States",
-       x = "Number of States",
-       y = "BIC Value") +
-  theme_minimal()
-
-# Plot of Log-Likelihood vs Number of States
-ggplot(result_df, aes(x = States, y = LogLikelihood)) +
-  geom_line(color = "blue", linewidth = 1) +
-  geom_point(color = "red", size = 3) +
-  labs(title = "Log-Likelihood vs. Number of States",
-       x = "Number of States",
-       y = "Log-Likelihood") +
-  theme_minimal()
 
 
 # ************************************
@@ -447,7 +420,6 @@ for (i in 1:10) {
 }
 
 # calculating deviations and threshold
-#train_log_likelihood <- logLik(best_model) / nrow(train_features)
 train_log_likelihood <- forwardbackward(best_model)$logLike / nrow(train_features)
 subset_data_frame$Deviation <- subset_data_frame$avg_loglikelihood - train_log_likelihood
 threshold <- max(abs(subset_data_frame$Deviation))
