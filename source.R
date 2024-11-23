@@ -25,7 +25,7 @@ library("car")
 library(doParallel)
 library(foreach)
 
-file_path <- "/Users/koushaamouzesh/Desktop/Fall 2024/318/term project/group_project/TermProjectData.txt"
+file_path <- "C:/Users/Richard/Documents/SFUfall2024/CMPT318/TermProject/TermProjectData.txt"
 
 df <- fread(file_path, header = TRUE, sep = ",", na.strings = "NA", stringsAsFactors = FALSE)
 
@@ -495,7 +495,6 @@ ggplot(comparison_df, aes(x = Data, y = LogLikelihood, fill = Data)) +
        x = "Dataset", y = "Normalized Log-Likelihood") +
   theme_minimal() +
   theme(legend.position = "none")
-
 
 
 
