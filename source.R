@@ -26,7 +26,7 @@ library("car")
 library(doParallel)
 library(foreach)
 
-file_path <- "/Users/koushaamouzesh/Desktop/Fall 2024/318/term project/group_project/TermProjectData.txt"
+file_path <- "TermProjectData.txt"
 df <- fread(file_path, header = TRUE, sep = ",", na.strings = "NA", stringsAsFactors = FALSE)
 
 df <- as.data.frame(df)
@@ -508,7 +508,6 @@ subset_size = nrow(test_data_injected_anomalies) / 3
 
 # Spliting the dataset into 3 subsets for testing
 subsets <- split(test_data_injected_anomalies, ceiling(seq_along(1:nrow(test_data_injected_anomalies)) / subset_size))
-subsets[1]
 
 # Function to inject anomalies
 inject_anomalies <- function(df, anomalies_per_subset = 100) {
@@ -561,7 +560,9 @@ for (i in 1:3) {
   flag_anomalous_subsets(anomalous_subsets[[i]], threshold)
 }
 
-flag_anomalous_subsets(subsets[[1]], threshold)
+for (i in 1:3) {
+  flag_anomalous_subsets(subsets[[i]], threshold)
+}
 
 # boxplot comparison for each subset before and after anomalies
 plot_subset_comparison <- function(subsets, anomalous_subsets, variable) {
@@ -598,7 +599,6 @@ plot_subset_comparison <- function(subsets, anomalous_subsets, variable) {
 }
 
 plot_subset_comparison(subsets[1], anomalous_subsets[1], c("Voltage", "Global_intensity"))
-
 
 
 
