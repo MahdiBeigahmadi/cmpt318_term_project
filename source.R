@@ -246,8 +246,12 @@ df_scaled <- extract_time_window(df_scaled)
 train_data <- df_scaled %>% filter(Year <= 2008)
 test_data <- df_scaled %>% filter(Year == 2009)
 
+
 train_features <- train_data[, c("Global_intensity","Voltage")]
 test_features <- test_data[, c("Global_intensity","Voltage")]
+
+# Saving test_data for injecting anomalies
+test_data_injected_anomalies <- test_features
 
 # ************************************
 # Model Training Optimizations
@@ -473,7 +477,7 @@ cat("Log-Likelihood for Test Data: ", test_log_likelihood, "\n")
 #  normalized Log-Likelihood
 # ************************************
 
-# nomalizing the log-likelihood by dividing by the number of observations
+# normalizing the log-likelihood by dividing by the number of observations
 train_log_likelihood_normalized <- train_log_likelihood / nrow(train_data)
 test_log_likelihood_normalized <- test_log_likelihood / nrow(test_data)
 
@@ -495,6 +499,76 @@ ggplot(comparison_df, aes(x = Data, y = LogLikelihood, fill = Data)) +
        x = "Dataset", y = "Normalized Log-Likelihood") +
   theme_minimal() +
   theme(legend.position = "none")
+
+# ************************************
+# Anomalies injection
+# ************************************
+
+subset_size = nrow(test_data_injected_anomalies) / 3
+
+# Spliting the dataset into 3 subsets for testing
+subsets <- split(test_data_injected_anomalies, ceiling(seq_along(1:nrow(test_data_injected_anomalies)) / subset_size))
+
+# Function to inject anomalies
+inject_anomalies <- function(df, anomalies_per_subset = 100) {
+  set.seed(42)  
+  anomaly_indices <- sample(1:nrow(df), anomalies_per_subset, replace = FALSE)
+  
+  df[anomaly_indices, "Global_intensity"] <- runif(anomalies_per_subset, -10, 10)  
+  df[anomaly_indices, "Voltage"] <- runif(anomalies_per_subset, -5, 5)  
+  
+  return(df)
+}
+
+# Inject anomalies into the subsets
+anomalous_subsets <- lapply(subsets, inject_anomalies)
+
+# Function for flagging anomalies in subsets
+flag_anomalous_subsets <- function(subset, threshold) {
+  
+  # creating a new model with the subset data
+  hmm_model_subset <- depmix(
+    response = list(Global_intensity ~ 1, Voltage ~ 1),
+    data = subset,
+    nstates = best_num_states, # to stick to the best model params
+    family = list(gaussian(), gaussian())
+  )
+  
+  # choosing the parameters from the best model
+  hmm_model_subset <- setpars(hmm_model_subset, getpars(best_model))
+  
+  
+  # computing the log-likelihood without re-fitting
+  fb <- forwardbackward(hmm_model_subset)
+  normalize_loglikelihood_subset <- fb$logLike / nrow(subset_features)
+  
+  # calculate the deviation from the training model
+  deviation <- normalize_loglikelihood_subset - train_log_likelihood_normalized
+  
+  if (abs(deviation) > threshold) {
+    cat("Anomalie detected, the data deviates from the threshold by:", abs(deviation), "\n")
+  } else {
+    cat("Normal, no anomalies detected.\n")
+  }
+}
+
+# ************************************
+# Testing the model's ability to detect
+# anomalies
+# ************************************
+
+for (i in 1:3) {
+  flag_anomalous_subsets(anomalous_subsets[[i]],threshold)
+}
+
+flag_anomalous_subsets(subsets[[1]],threshold)
+
+
+
+
+
+
+
 
 
 
