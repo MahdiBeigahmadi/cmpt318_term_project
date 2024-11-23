@@ -13,6 +13,7 @@ install_if_missing <- function(packages){
 install_if_missing(required_packages)
 library(dplyr)
 library(ggplot2)
+library(reshape2)
 library(lubridate)
 library(data.table)
 library(usethis)
@@ -25,8 +26,7 @@ library("car")
 library(doParallel)
 library(foreach)
 
-file_path <- "C:/Users/Richard/Documents/SFUfall2024/CMPT318/TermProject/TermProjectData.txt"
-
+file_path <- "/Users/koushaamouzesh/Desktop/Fall 2024/318/term project/group_project/TermProjectData.txt"
 df <- fread(file_path, header = TRUE, sep = ",", na.strings = "NA", stringsAsFactors = FALSE)
 
 df <- as.data.frame(df)
@@ -508,6 +508,7 @@ subset_size = nrow(test_data_injected_anomalies) / 3
 
 # Spliting the dataset into 3 subsets for testing
 subsets <- split(test_data_injected_anomalies, ceiling(seq_along(1:nrow(test_data_injected_anomalies)) / subset_size))
+subsets[1]
 
 # Function to inject anomalies
 inject_anomalies <- function(df, anomalies_per_subset = 100) {
@@ -520,10 +521,10 @@ inject_anomalies <- function(df, anomalies_per_subset = 100) {
   return(df)
 }
 
-# Inject anomalies into the subsets
+# injecting anomalies into the subsets
 anomalous_subsets <- lapply(subsets, inject_anomalies)
 
-# Function for flagging anomalies in subsets
+# function that flags anomalies in subsets
 flag_anomalous_subsets <- function(subset, threshold) {
   
   # creating a new model with the subset data
@@ -553,21 +554,50 @@ flag_anomalous_subsets <- function(subset, threshold) {
 }
 
 # ************************************
-# Testing the model's ability to detect
+# testing the model's ability to detect
 # anomalies
 # ************************************
-
 for (i in 1:3) {
-  flag_anomalous_subsets(anomalous_subsets[[i]],threshold)
+  flag_anomalous_subsets(anomalous_subsets[[i]], threshold)
 }
 
-flag_anomalous_subsets(subsets[[1]],threshold)
+flag_anomalous_subsets(subsets[[1]], threshold)
 
+# boxplot comparison for each subset before and after anomalies
+plot_subset_comparison <- function(subsets, anomalous_subsets, variable) {
+  plot_list <- list()
+  
+  for (i in 1:length(subsets)) {
+    original <- subsets[[i]]
+    anomalous <- anomalous_subsets[[i]]
+    
+    original$Type <- "Original"
+    anomalous$Type <- "Anomalous"
+    
+    combined <- rbind(
+      data.frame(original[, c("Type", variable)]),
+      data.frame(anomalous[, c("Type", variable)])
+    )
+    
+    melted <- melt(combined, id.vars = "Type", variable.name = "Variable", value.name = "Value")
+    
+    p <- ggplot(melted, aes(x = Type, y = Value, color = Type, fill = Type)) +
+      geom_boxplot(alpha = 0.6) +
+      facet_wrap(~Variable, scales = "free") +
+      labs(title = paste("Subset", i, ": Original vs Anomalous Data"),
+           x = "Type of Data", y = "Value") +
+      theme_minimal()
+    
+    plot_list[[i]] <- p
+  }
+  
+  # the plots shown
+  for (p in plot_list) {
+    print(p)
+  }
+}
 
-
-
-
-
+plot_subset_comparison(subsets[1], anomalous_subsets[1], c("Voltage", "Global_intensity"))
 
 
 
