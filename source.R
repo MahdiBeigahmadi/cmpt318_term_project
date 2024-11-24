@@ -565,7 +565,7 @@ for (i in 1:3) {
 }
 
 # boxplot comparison for each subset before and after anomalies
-plot_subset_comparison <- function(subsets, anomalous_subsets, variable) {
+plot_subset_comparison <- function(subsets, anomalous_subsets, variable,subset_number) {
   plot_list <- list()
   
   for (i in 1:length(subsets)) {
@@ -585,7 +585,7 @@ plot_subset_comparison <- function(subsets, anomalous_subsets, variable) {
     p <- ggplot(melted, aes(x = Type, y = Value, color = Type, fill = Type)) +
       geom_boxplot(alpha = 0.6) +
       facet_wrap(~Variable, scales = "free") +
-      labs(title = paste("Subset", i, ": Original vs Anomalous Data"),
+      labs(title = paste("Subset", subset_number, ": Original vs Anomalous Data"),
            x = "Type of Data", y = "Value") +
       theme_minimal()
     
@@ -598,7 +598,9 @@ plot_subset_comparison <- function(subsets, anomalous_subsets, variable) {
   }
 }
 
-plot_subset_comparison(subsets[1], anomalous_subsets[1], c("Voltage", "Global_intensity"))
+plot_subset_comparison(subsets[1], anomalous_subsets[1], c("Voltage", "Global_intensity"),1)
+plot_subset_comparison(subsets[2], anomalous_subsets[2], c("Voltage", "Global_intensity"),2)
+plot_subset_comparison(subsets[3], anomalous_subsets[3], c("Voltage", "Global_intensity"),3)
 
 
 
