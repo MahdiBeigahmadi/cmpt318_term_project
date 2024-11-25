@@ -15,7 +15,7 @@ install_if_missing <- function(packages) {
 
 install_if_missing(required_packages)
 
-# Load Libraries
+# libraries
 library(dplyr)
 library(ggplot2)
 library(lubridate)
@@ -30,7 +30,7 @@ library(doParallel)
 library(foreach)
 library(tidyr)    
 
-file_path <- "/Users/mahdi/Desktop/termproject/TermProjectData.txt"
+file_path <- "/Users/koushaamouzesh/Desktop/Fall 2024/318/term project/group_project/TermProjectData.txt"
 df <- fread(file_path, header = TRUE, sep = ",", na.strings = "NA", stringsAsFactors = FALSE)
 df <- as.data.frame(df)
 
@@ -77,7 +77,7 @@ numeric_cols <- c(
 
 df[numeric_cols] <- lapply(df[numeric_cols], function(x) as.numeric(x))
 
-# Check conversion success
+# checking conversion success
 if (any(sapply(df[numeric_cols], function(x) any(is.na(x))))) {
   cat("Warning: Some numeric columns have NA values after conversion.\n")
 } else {
@@ -88,18 +88,18 @@ if (any(sapply(df[numeric_cols], function(x) any(is.na(x))))) {
 # Handling the Missing Values
 # ******************************
 
-# Checking for missing values
+# checking for missing values
 missing_values <- sapply(df[numeric_cols], function(x) sum(is.na(x)))
 cat("Missing Values in Each Numeric Column:\n")
 print(missing_values)
 
 # NA values approximation
 fill_na <- function(x) {
-  # For interpolation
+  # for interpolation
   x <- na.approx(x, na.rm = FALSE)
-  # To handle leading NAs
+  # to handle leading NAs
   x <- na.locf(x, na.rm = FALSE)
-  # To handle trailing NAs
+  # to handle trailing NAs
   x <- na.locf(x, na.rm = FALSE, fromLast = TRUE)
   return(x)
 }
@@ -120,7 +120,6 @@ df_clean$Hour <- as.integer(format(df_clean$DateTime, "%H"))
 df_clean$DayOfWeek <- as.factor(weekdays(df_clean$DateTime))
 df_clean$Month <- as.factor(format(df_clean$DateTime, "%m"))
 
-# Removing initial rows with NA due to lag and rolling calculations
 df_clean <- df_clean[complete.cases(df_clean), ]
 
 numeric_cols <- c(
@@ -135,14 +134,14 @@ numeric_cols <- c(
 df_scaled <- df_clean
 df_scaled[numeric_cols] <- scale(df_scaled[numeric_cols])
 
-# Checking the scaling results making sure Mean = 0
+# checking the scaling results making sure Mean = 0
 cat("Summary of Scaled Variables:\n")
 print(summary(df_scaled[numeric_cols]))
 
-# Making sure SD = 1
+# making sure SD = 1
 col_sds <- sapply(df_scaled[numeric_cols], sd, na.rm = TRUE)
 
-# Display the standard deviations
+# display the standard deviations
 cat("Standard Deviations of All Columns:\n")
 print(col_sds)
 
@@ -150,11 +149,11 @@ print(col_sds)
 # Principal Component Analysis (PCA)
 # ************************************
 
-# Preparing data for PCA
+# preparing data for PCA
 pca_data <- df_scaled[numeric_cols]
-# Performing PCA
+# performing PCA
 pca_result <- prcomp(pca_data, center = FALSE, scale. = FALSE)
-# Summary of PCA results
+# summary of PCA results
 cat("PCA Summary:\n")
 print(summary(pca_result))
 
@@ -175,7 +174,7 @@ fviz_eig(pca_result, addlabels = TRUE, ylim = c(0, 50)) +
     y = "Percentage of Variance Explained"
   )
 
-# Adding PCA scores to the dataframe
+# adding PCA scores to the dataframe
 df_scaled$PC1 <- pca_result$x[, 1]
 df_scaled$PC2 <- pca_result$x[, 2]
 
@@ -183,14 +182,14 @@ df_scaled$PC2 <- pca_result$x[, 2]
 # Visualizations with PCA Components
 # ***********************************
 
-# Correlation Plot of Original Variables
+# correlation Plot of Original Variables
 cor_matrix <- cor(df_scaled[, numeric_cols])
 
-# Convert to data frame and add row names as a column
+# convert to data frame and add row names as a column
 cor_df <- as.data.frame(cor_matrix)
 cor_df$Var1 <- rownames(cor_df)
 
-# Use pivot_longer to reshape the data
+# use pivot_longer to reshape the data
 melted_cor <- pivot_longer(
   cor_df,
   cols = -Var1,
@@ -267,27 +266,27 @@ test_data <- df_scaled %>% filter(Year == 2009)
 train_features <- train_data[, c("Global_intensity", "Voltage")]
 test_features <- test_data[, c("Global_intensity", "Voltage")]
 
-# Saving test_data for injecting anomalies
+# saving test_data for injecting anomalies
 test_data_injected_anomalies <- test_features
 
 # ************************************
 # Model Training Optimizations
 # ************************************
 
-# Reduce the number of states to try
+# reducing the number of states to try
 states_list <- c(4, 6, 7, 8, 10, 12, 13)
 
-# Adjust EM algorithm control parameters
+# adjusting EM algorithm control parameters
 em_ctrl <- em.control(maxit = 1000, tol = 1e-5)
 
-# Initialize lists to store results
+# initializing lists to store results
 log_likelihoods <- list()
 bics <- list()
 models <- list()
 
-# Parallelize model training (requires doParallel and foreach packages)
+# parallelized model training (requires doParallel and foreach packages)
 
-# Set up parallel backend to use multiple processors
+# setting up parallel backend to use multiple processors
 num_cores <- detectCores()
 cl <- makeCluster(num_cores)
 registerDoParallel(cl)
@@ -319,7 +318,7 @@ results <- foreach(num_states = states_list, .packages = 'depmixS4') %dopar% {
 
 stopCluster(cl)
 
-# Collecting results from the parallel computations
+# collecting results from the parallel computations
 for (res in results) {
   num_states <- res$num_states
   log_likelihoods[[as.character(num_states)]] <- res$log_likelihood
@@ -329,11 +328,11 @@ for (res in results) {
   cat("BIC for", num_states, "states:", res$bic_value, "\n")
 }
 
-# Select the best model based on the lowest BIC
-best_num_states <- 7  # Adjusted based on your specific choice
+# selecting the best model based on the lowest BIC
+best_num_states <- 7  # based on experiments
 best_model <- models[[as.character(best_num_states)]]
 
-# Saving the best model
+# saving the best model
 saveRDS(best_model, file = "training_model.rds")
 
 cat("\nTraining Results Summary:\n")
@@ -474,10 +473,10 @@ cat("Log-Likelihood for Training Data: ", train_log_likelihood, "\n")
 # Log-Likelihood for Test Data
 # ************************************
 
-# The best model fitted on the test dataset
+# the best model fitted on the test dataset
 test_fitted <- setpars(test_model, getpars(models[[as.character(best_num_states)]]))
 
-# Log-likelihood for test data using the forward-backward algorithm
+# log-likelihood for test data using the forward-backward algorithm
 fb_test <- forwardbackward(test_fitted)
 test_log_likelihood <- fb_test$logLik
 
@@ -487,7 +486,7 @@ cat("Log-Likelihood for Test Data: ", test_log_likelihood, "\n")
 # Normalized Log-Likelihood
 # ************************************
 
-# Normalizing the log-likelihood by dividing by the number of observations
+# normalizing the log-likelihood by dividing by the number of observations
 train_log_likelihood_normalized <- train_log_likelihood / nrow(train_data)
 test_log_likelihood_normalized <- test_log_likelihood / nrow(test_data)
 
@@ -518,10 +517,10 @@ ggplot(comparison_df, aes(x = Data, y = LogLikelihood, fill = Data)) +
 
 subset_size <- nrow(test_data_injected_anomalies) / 3
 
-# Splitting the dataset into 3 subsets for testing
+# splitting the dataset into 3 subsets for testing
 subsets <- split(test_data_injected_anomalies, ceiling(seq_along(1:nrow(test_data_injected_anomalies)) / subset_size))
 
-# Function to inject anomalies
+# function to inject anomalies
 inject_anomalies <- function(df, anomalies_per_subset = 100) {
   set.seed(42)
   anomaly_indices <- sample(1:nrow(df), anomalies_per_subset, replace = FALSE)
@@ -532,12 +531,12 @@ inject_anomalies <- function(df, anomalies_per_subset = 100) {
   return(df)
 }
 
-# Injecting anomalies into the subsets
+# injecting anomalies into the subsets
 anomalous_subsets <- lapply(subsets, inject_anomalies)
 
-# Function that flags anomalies in subsets
+# function that flags anomalies in subsets
 flag_anomalous_subsets <- function(subset, threshold) {
-  # Creating a new model with the subset data
+  # creating a new model with the subset data
   hmm_model_subset <- depmix(
     response = list(Global_intensity ~ 1, Voltage ~ 1),
     data = subset,
@@ -545,14 +544,15 @@ flag_anomalous_subsets <- function(subset, threshold) {
     family = list(gaussian(), gaussian())
   )
   
-  # Choosing the parameters from the best model
+  # choosing the parameters from the best model
   hmm_model_subset <- setpars(hmm_model_subset, getpars(best_model))
   
-  # Computing the log-likelihood without re-fitting
+  # computing the log-likelihood without re-fitting
   fb <- forwardbackward(hmm_model_subset)
-  normalize_loglikelihood_subset <- fb$logLike / nrow(subset)
+  normalize_loglikelihood_subset <- fb$logLike / nrow(subset_features)
+  # cat("normalized anamoly for subset: ", normalize_loglikelihood_subset)
   
-  # Calculate the deviation from the training model
+  # calculate the deviation from the training model
   deviation <- normalize_loglikelihood_subset - train_log_likelihood_normalized
   
   if (abs(deviation) > threshold) {
@@ -561,6 +561,7 @@ flag_anomalous_subsets <- function(subset, threshold) {
     cat("Normal, no anomalies detected.\n")
   }
 }
+
 
 # ************************************
 # Testing the model's ability to detect anomalies
@@ -577,7 +578,7 @@ for (i in 1:3) {
   flag_anomalous_subsets(subsets[[i]], threshold)
 }
 
-# Boxplot comparison for each subset before and after anomalies
+# boxplot comparison for each subset before and after anomalies
 plot_subset_comparison <- function(subsets, anomalous_subsets, variable, subset_number) {
   plot_list <- list()
   
@@ -593,7 +594,7 @@ plot_subset_comparison <- function(subsets, anomalous_subsets, variable, subset_
       data.frame(anomalous[, c("Type", variable)])
     )
     
-    # Uses all_of(variable) to avoid the warning
+    # uses all_of(variable) to avoid the warning
     melted <- pivot_longer(
       combined,
       cols = all_of(variable),
@@ -608,17 +609,20 @@ plot_subset_comparison <- function(subsets, anomalous_subsets, variable, subset_
         title = paste("Subset", subset_number, ": Original vs Anomalous Data"),
         x = "Type of Data", y = "Value"
       ) +
-      theme_minimal()
+      theme_minimal()+
+      theme(
+        plot.title = element_text(size = 16, face = "bold"), 
+        axis.title.x = element_text(size = 14), 
+        axis.title.y = element_text(size = 14), 
+        axis.text = element_text(size = 12),    
+        strip.text = element_text(size = 14)    
+      )
     
     plot_list[[i]] <- p
   }
   
-  # Displays the plots
-  for (p in plot_list) {
-    print(p)
-  }
+  return(plot_list)
 }
 plot_subset_comparison(subsets[1], anomalous_subsets[1], c("Voltage", "Global_intensity"), 1)
 plot_subset_comparison(subsets[2], anomalous_subsets[2], c("Voltage", "Global_intensity"), 2)
 plot_subset_comparison(subsets[3], anomalous_subsets[3], c("Voltage", "Global_intensity"), 3)
-
